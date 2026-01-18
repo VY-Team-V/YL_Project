@@ -1,3 +1,4 @@
+import arcade as ar
 import pygame as pg
 import json
 import os
@@ -81,4 +82,5 @@ class MenuResources:
             json.dump(self.high_scores, f)
             
     def get_top_scores(self, count=5):
+
         return self.high_scores["scores"][:count]
