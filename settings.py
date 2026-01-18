@@ -1,0 +1,46 @@
+import math
+
+# game settings
+RES = WIDTH, HEIGHT = 1600, 900
+HALF_WIDTH = WIDTH // 2
+HALF_HEIGHT = HEIGHT // 2
+FPS = 60
+
+# Player settings for different maps
+PLAYER_START_POSITIONS = {
+    0: (1.5, 5),   # Карта 1: Замок
+    1: (1.5, 1.5), # Карта 2: Лабиринт
+    2: (1.5, 1.5)  # Карта 3: Военная база - исправлено на правильную позицию
+}
+
+PLAYER_ANGLE = 0
+PLAYER_SPEED = 0.004
+PLAYER_ROT_SPEED = 0.002
+PLAYER_SIZE_SCALE = 60
+PLAYER_MAX_HEALTH = 100
+
+# Mouse settings
+MOUSE_SENSITIVITY = 0.0003
+MOUSE_MAX_REL = 40
+MOUSE_BORDER_LEFT = 100
+MOUSE_BORDER_RIGHT = WIDTH - MOUSE_BORDER_LEFT
+
+# Colors
+FLOOR_COLOR = (30, 30, 30)
+MENU_BG_COLOR = (20, 20, 40)
+MENU_TEXT_COLOR = (255, 255, 255)
+MENU_HIGHLIGHT_COLOR = (255, 50, 50)
+
+# Raycasting settings
+FOV = math.pi / 3
+HALF_FOV = FOV / 2
+NUM_RAYS = WIDTH // 2
+HALF_NUM_RAYS = NUM_RAYS // 2
+DELTA_ANGLE = FOV / NUM_RAYS
+MAX_DEPTH = 20
+
+SCREEN_DIST = HALF_WIDTH / math.tan(HALF_FOV)
+SCALE = WIDTH // NUM_RAYS
+
+TEXTURE_SIZE = 256
+HALF_TEXTURE_SIZE = TEXTURE_SIZE // 2
