@@ -1,3 +1,4 @@
+import arcade as ar
 from collections import deque
 from functools import lru_cache
 
