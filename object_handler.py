@@ -1,3 +1,4 @@
+import arcade as ar
 from sprite_object import *
 from npc import *
 from random import choices, randrange
