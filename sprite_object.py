@@ -1,3 +1,4 @@
+import arcade as ar
 import pygame as pg
 from settings import *
 import os
