@@ -1,4 +1,3 @@
-import arcade as ar
 import math
 
 # game settings

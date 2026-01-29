@@ -1,7 +1,7 @@
-import arcade as ar
+# [file name]: main.py
 import pygame as pg
 import sys
-import json
+import csv
 import os
 from datetime import datetime
 from settings import *
@@ -46,8 +46,11 @@ class Game:
         self.selected_menu_item = 0
         self.selected_map_item = 0
         
-        self.high_scores_file = "high_scores.json"
+        self.high_scores_file = "high_scores.csv"
         self.high_scores = self.load_high_scores()
+        
+        # Флаг для предотвращения многократного сохранения одного рекорда
+        self.score_saved_this_game = False
         
         self.load_menu_resources()
         
@@ -61,10 +64,16 @@ class Game:
         self.pathfinding = None
 
     def load_menu_resources(self):
-        self.menu_bg = pg.Surface(RES)
-        for y in range(HEIGHT):
-            color_value = 20 + int(20 * (y / HEIGHT))
-            pg.draw.line(self.menu_bg, (color_value, color_value, 60), (0, y), (WIDTH, y))
+        # Загрузка фона главного меню (должен лежать в resources/textures/menu_bg.png)
+        try:
+            self.menu_bg = pg.image.load('resources/textures/menu_bg.png').convert()
+            self.menu_bg = pg.transform.scale(self.menu_bg, RES)
+        except:
+            # Создание запасного градиентного фона
+            self.menu_bg = pg.Surface(RES)
+            for y in range(HEIGHT):
+                color_value = 20 + int(20 * (y / HEIGHT))
+                pg.draw.line(self.menu_bg, (color_value, color_value, 60), (0, y), (WIDTH, y))
         
         self.logo = None
 
@@ -88,6 +97,7 @@ class Game:
         self.start_time = pg.time.get_ticks()
         self.time_played = 0
         self.current_score = 0
+        self.score_saved_this_game = False  # Сбрасываем флаг сохранения
         
         # Воспроизведение музыки
         pg.mixer.music.play(-1)
@@ -172,7 +182,7 @@ class Game:
         self.screen.blit(title_shadow, (WIDTH//2 - title.get_width()//2 + 3, 103))
         self.screen.blit(title, (WIDTH//2 - title.get_width()//2, 100))
         
-        # Список карт - ИСПРАВЛЕНО ПОЗИЦИОНИРОВАНИЕ
+        # Список карт - ТОЛЬКО НАЗВАНИЕ КАРТЫ
         for i, map_name in enumerate(self.maps):
             is_selected = (i == self.selected_map_item)
             color = (255, 200, 0) if is_selected else (180, 180, 180)
@@ -180,33 +190,19 @@ class Game:
             # Название карты
             text = self.medium_font.render(map_name, True, color)
             x = WIDTH // 2 - text.get_width() // 2
-            y = 250 + i * 150  # Увеличен интервал
-            
-            # Иконка сложности
-            difficulty = ["●○○", "●●○", "●●●"][i]
-            diff_text = self.small_font.render(f"Сложность: {difficulty}", True, (200, 200, 100))
+            y = 300 + i * 100  # Увеличен интервал
             
             if is_selected:
                 # Подсветка выбранной карты
                 pg.draw.rect(self.screen, (50, 50, 255, 80), 
                             (x - 30, y - 15, text.get_width() + 60, text.get_height() + 30), 
                             border_radius=10)
-                
-                # Описание карты
-                descriptions = [
-                    "Классический замок с коридорами и залами",
-                    "Сложный лабиринт с множеством тупиков",
-                    "Военная база с открытыми пространствами"
-                ]
-                desc = self.small_font.render(descriptions[i], True, (200, 255, 200))
-                self.screen.blit(desc, (WIDTH//2 - desc.get_width()//2, y + 100))  # Исправлена позиция
             
             # Отображение текста
             self.screen.blit(text, (x, y))
-            self.screen.blit(diff_text, (x, y + 50))  # Исправлена позиция
         
         # Кнопка назад
-        back_text = self.medium_font.render("← Назад (ESC)", True, (150, 150, 150))
+        back_text = self.medium_font.render("Назад (ESC)", True, (150, 150, 150))
         self.screen.blit(back_text, (50, HEIGHT - 100))
         
         # Управление
@@ -222,33 +218,28 @@ class Game:
         self.screen.blit(title_shadow, (WIDTH//2 - title.get_width()//2 + 3, 103))
         self.screen.blit(title, (WIDTH//2 - title.get_width()//2, 100))
         
-        medals = ["🥇", "🥈", "🥉"]
-        
         if self.high_scores:
-            for i, score in enumerate(self.high_scores[:3]):
-                y_pos = 220 + i * 120
+            for i, score_data in enumerate(self.high_scores[:3]):  # Только 3 лучших рекорда
+                y_pos = 250 + i * 100  # Увеличил интервал для лучшей читаемости
                 
-                pg.draw.rect(self.screen, (30, 30, 60, 200), 
-                            (WIDTH//2 - 300, y_pos - 10, 600, 100), 
-                            border_radius=15)
+                # Создаем фон для записи
+                bg_color = (30, 30, 60, 200) if i % 2 == 0 else (40, 40, 70, 200)
+                pg.draw.rect(self.screen, bg_color, 
+                            (WIDTH//2 - 250, y_pos - 15, 500, 70),  # Уменьшил ширину
+                            border_radius=10)
                 
-                if i < 3:
-                    medal_text = self.medium_font.render(medals[i], True, (255, 215, 0))
-                    self.screen.blit(medal_text, (WIDTH//2 - 280, y_pos))
-                
+                # Место
                 place_text = self.medium_font.render(f"{i+1}.", True, (255, 255, 255))
-                self.screen.blit(place_text, (WIDTH//2 - 220, y_pos))
+                self.screen.blit(place_text, (WIDTH//2 - 220, y_pos + 10))
                 
-                name_text = self.medium_font.render(score.get('name', 'Игрок'), True, (100, 255, 100))
-                self.screen.blit(name_text, (WIDTH//2 - 150, y_pos))
-                
-                score_text = self.medium_font.render(f"{score['score']} очков", True, (255, 255, 100))
-                self.screen.blit(score_text, (WIDTH//2 + 100, y_pos))
+                # Очки
+                score_text = self.medium_font.render(f"{score_data['score']} очков", True, (255, 255, 100))
+                self.screen.blit(score_text, (WIDTH//2 - 50, y_pos + 10))
         else:
             no_scores = self.medium_font.render("Пока нет рекордов. Сыграйте игру!", True, (255, 150, 150))
             self.screen.blit(no_scores, (WIDTH//2 - no_scores.get_width()//2, 300))
         
-        back_text = self.medium_font.render("← Назад (ESC)", True, (255, 255, 255))
+        back_text = self.medium_font.render("Назад (ESC)", True, (255, 255, 255))
         self.screen.blit(back_text, (50, HEIGHT - 100))
         
         instruction = self.small_font.render("Нажмите ESC для возврата в меню", True, (200, 200, 100))
@@ -291,6 +282,14 @@ class Game:
             text = self.medium_font.render(stat, True, (255, 200, 200))
             self.screen.blit(text, (WIDTH//2 - text.get_width()//2, 250 + i * 70))
         
+        # Проверяем, является ли результат новым рекордом И ЕЩЕ НЕ СОХРАНЕННЫМ
+        if self.is_new_high_score() and not self.score_saved_this_game:
+            new_record = self.medium_font.render("НОВЫЙ РЕКОРД!", True, (255, 255, 0))
+            self.screen.blit(new_record, (WIDTH//2 - new_record.get_width()//2, 550))
+            # Сохраняем рекорд только один раз
+            self.save_high_score()
+            self.score_saved_this_game = True  # Устанавливаем флаг, что рекорд сохранен
+        
         continue_text = self.medium_font.render("Нажмите ПРОБЕЛ для возврата в меню", True, (255, 255, 100))
         self.screen.blit(continue_text, (WIDTH//2 - continue_text.get_width()//2, HEIGHT - 150))
 
@@ -311,9 +310,13 @@ class Game:
             text = self.medium_font.render(stat, True, (200, 255, 200))
             self.screen.blit(text, (WIDTH//2 - text.get_width()//2, 250 + i * 60))
         
-        if self.is_new_high_score():
+        # Проверяем, является ли результат новым рекордом И ЕЩЕ НЕ СОХРАНЕННЫМ
+        if self.is_new_high_score() and not self.score_saved_this_game:
             new_record_text = self.large_font.render("НОВЫЙ РЕКОРД!", True, (255, 255, 0))
             self.screen.blit(new_record_text, (WIDTH//2 - new_record_text.get_width()//2, HEIGHT - 200))
+            # Сохраняем рекорд только один раз
+            self.save_high_score()
+            self.score_saved_this_game = True  # Устанавливаем флаг, что рекорд сохранен
         
         continue_text = self.medium_font.render("Нажмите ПРОБЕЛ для возврата в меню", True, (255, 255, 100))
         self.screen.blit(continue_text, (WIDTH//2 - continue_text.get_width()//2, HEIGHT - 150))
@@ -329,38 +332,52 @@ class Game:
         return 0
 
     def load_high_scores(self):
+        scores = []
         try:
             if os.path.exists(self.high_scores_file):
-                with open(self.high_scores_file, 'r') as f:
-                    return json.load(f)
-        except:
-            pass
-        return []
+                with open(self.high_scores_file, 'r', newline='', encoding='utf-8') as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        # Преобразуем score в число
+                        row['score'] = int(row['score'])
+                        scores.append(row)
+        except Exception as e:
+            print(f"Ошибка загрузки рекордов: {e}")
+        return scores
 
-    def save_high_score(self, name="Игрок"):
+    def save_high_score(self):
+        # Сохраняем только очки
         score_data = {
-            'name': name,
-            'score': self.current_score,
-            'map': self.selected_map,
-            'kills': self.total_kills,
-            'time': self.time_played,
-            'date': datetime.now().strftime("%d.%m.%Y %H:%M")
+            'score': self.current_score
         }
         
         self.high_scores.append(score_data)
+        # Сортируем по убыванию очков
         self.high_scores.sort(key=lambda x: x['score'], reverse=True)
-        self.high_scores = self.high_scores[:10]
+        # Оставляем только топ-3
+        self.high_scores = self.high_scores[:3]
         
         try:
-            with open(self.high_scores_file, 'w') as f:
-                json.dump(self.high_scores, f, indent=2)
-        except:
-            pass
+            with open(self.high_scores_file, 'w', newline='', encoding='utf-8') as f:
+                fieldnames = ['score']
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(self.high_scores)
+            print("Рекорд сохранен в CSV!")
+        except Exception as e:
+            print(f"Ошибка сохранения рекорда: {e}")
 
     def is_new_high_score(self):
         if not self.high_scores:
             return True
-        return self.current_score > min(score['score'] for score in self.high_scores[:10]) if len(self.high_scores) >= 10 else True
+        
+        # Если рекордов меньше 3, то это новый рекорд
+        if len(self.high_scores) < 3:
+            return True
+        
+        # Проверяем, выше ли текущий счет минимального в топ-3
+        min_score = min(score['score'] for score in self.high_scores)
+        return self.current_score > min_score
 
     def check_events(self):
         self.global_trigger = False
@@ -436,9 +453,6 @@ class Game:
     def handle_game_end_events(self, event):
         if event.type == pg.KEYDOWN:
             if event.key == pg.K_SPACE or event.key == pg.K_RETURN:
-                if self.state == "WIN" and self.is_new_high_score():
-                    self.save_high_score()
-                
                 self.state = "MAIN_MENU"
                 pg.mouse.set_visible(True)
                 pg.event.set_grab(False)
