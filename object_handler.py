@@ -1,7 +1,9 @@
-from sprite_object import *
-from npc import *
-from random import choices, randrange
 
+import random
+import arcade
+from npc import SoldierNPC, CacoDemonNPC, CyberDemonNPC
+from settings import TILE_SIZE, WIDTH, HEIGHT, HALF_WIDTH, HALF_HEIGHT
+from map import MAPS
 
 class ObjectHandler:
     def __init__(self, game, map_id=0):
@@ -9,24 +11,13 @@ class ObjectHandler:
         self.map_id = map_id
         self.sprite_list = []
         self.npc_list = []
-        self.npc_sprite_path = 'resources/sprites/npc/'
-        self.static_sprite_path = 'resources/sprites/static_sprites/'
-        self.anim_sprite_path = 'resources/sprites/animated_sprites/'
-        add_sprite = self.add_sprite
-        add_npc = self.add_npc
-        self.npc_positions = {}
-
-        # ФИКСИРОВАННЫЕ позиции врагов для каждой карты
+        self.shot_effects = []
         self.fixed_npc_positions = self.get_fixed_npc_positions()
-        
         self.spawn_fixed_npc()
-        
-        # Размещение спрайтов в зависимости от карты
         self.setup_sprites()
 
     def get_fixed_npc_positions(self):
-        """Возвращает фиксированные позиции врагов для текущей карты"""
-        if self.map_id == 0:  # Замок
+        if self.map_id == 0:
             return [
                 {'type': SoldierNPC, 'pos': (3.5, 3.5)},
                 {'type': SoldierNPC, 'pos': (12.5, 5.5)},
@@ -34,7 +25,7 @@ class ObjectHandler:
                 {'type': SoldierNPC, 'pos': (5.5, 12.5)},
                 {'type': CyberDemonNPC, 'pos': (14.5, 14.5)}
             ]
-        elif self.map_id == 1:  # Лабиринт
+        elif self.map_id == 1:
             return [
                 {'type': SoldierNPC, 'pos': (3.5, 2.5)},
                 {'type': SoldierNPC, 'pos': (12.5, 2.5)},
@@ -42,7 +33,7 @@ class ObjectHandler:
                 {'type': SoldierNPC, 'pos': (2.5, 12.5)},
                 {'type': CyberDemonNPC, 'pos': (12.5, 12.5)}
             ]
-        elif self.map_id == 2:  # Военная база
+        elif self.map_id == 2:
             return [
                 {'type': SoldierNPC, 'pos': (4.5, 4.5)},
                 {'type': SoldierNPC, 'pos': (11.5, 4.5)},
@@ -53,46 +44,50 @@ class ObjectHandler:
         return []
 
     def spawn_fixed_npc(self):
-        """Спавнит врагов на фиксированных позициях"""
         for npc_data in self.fixed_npc_positions:
             npc_type = npc_data['type']
             pos = npc_data['pos']
-            self.add_npc(npc_type(self.game, pos=pos))
+            self.add_npc(npc_type(self.game, pos))
 
     def setup_sprites(self):
-        add_sprite = self.add_sprite
-        
-        if self.map_id == 0:  # Замок
-            add_sprite(AnimatedSprite(self.game, pos=(1.5, 1.5)))
-            add_sprite(AnimatedSprite(self.game, pos=(1.5, 7.5)))
-            add_sprite(AnimatedSprite(self.game, pos=(5.5, 3.25)))
-            add_sprite(AnimatedSprite(self.game, pos=(5.5, 4.75)))
-            add_sprite(AnimatedSprite(self.game, pos=(7.5, 2.5)))
-            
-        elif self.map_id == 1:  # Лабиринт
-            add_sprite(AnimatedSprite(self.game, pos=(2.5, 2.5)))
-            add_sprite(AnimatedSprite(self.game, pos=(2.5, 13.5)))
-            add_sprite(AnimatedSprite(self.game, pos=(7.5, 7.5)))
-            add_sprite(AnimatedSprite(self.game, pos=(12.5, 2.5)))
-            
-        elif self.map_id == 2:  # Военная база
-            add_sprite(AnimatedSprite(self.game, pos=(3.5, 3.5)))
-            add_sprite(AnimatedSprite(self.game, pos=(3.5, 12.5)))
-            add_sprite(AnimatedSprite(self.game, pos=(8.5, 8.5)))
-            add_sprite(AnimatedSprite(self.game, pos=(12.5, 3.5)))
+        pass
 
     def check_win(self):
         alive_enemies = [npc for npc in self.npc_list if npc.alive]
         if not alive_enemies and self.game.state == "PLAYING":
             self.game.state = "WIN"
-            pg.mouse.set_visible(True)
-            pg.event.set_grab(False)
 
-    def update(self):
-        self.npc_positions = {npc.map_pos for npc in self.npc_list if npc.alive}
-        [sprite.update() for sprite in self.sprite_list]
-        [npc.update() for npc in self.npc_list]
+    def add_shot_effect(self, x, y):
+        self.shot_effects.append({'x': x, 'y': y, 'size': 20, 'alpha': 255, 'life': 0.3})
+
+    def update(self, delta_time):
+        for sprite in self.sprite_list:
+            if isinstance(sprite, AnimatedSprite):
+                sprite.update(delta_time)
+        for npc in self.npc_list:
+            npc.update(delta_time)
+
+        for effect in self.shot_effects[:]:
+            effect['life'] -= delta_time
+            effect['size'] += 100 * delta_time
+            effect['alpha'] = int(255 * (effect['life'] / 0.3))
+            if effect['life'] <= 0:
+                self.shot_effects.remove(effect)
+
         self.check_win()
+
+    def draw(self):
+        for effect in self.shot_effects:
+            arcade.draw_circle_filled(
+                effect['x'], 
+                effect['y'], 
+                effect['size'], 
+                (255, 255, 200, effect['alpha'])
+            )
+
+        for npc in self.npc_list:
+            if npc.alive:
+                npc.draw()
 
     def add_npc(self, npc):
         self.npc_list.append(npc)
