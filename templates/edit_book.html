@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Edit Book: {{ book.title }}</h2>
+<form method="post" enctype="multipart/form-data">
+    {{ form.hidden_tag() }}
+    <div class="mb-3">
+        {{ form.title.label(class="form-label") }}
+        {{ form.title(class="form-control") }}
+        {% for error in form.title.errors %}
+            <div class="text-danger small">{{ error }}</div>
+        {% endfor %}
+    </div>
+    <div class="mb-3">
+        {{ form.year.label(class="form-label") }}
+        {{ form.year(class="form-control") }}
+        {% for error in form.year.errors %}
+            <div class="text-danger small">{{ error }}</div>
+        {% endfor %}
+    </div>
+    <div class="mb-3">
+        {{ form.author.label(class="form-label") }}
+        {{ form.author(class="form-select") }}
+        {% for error in form.author.errors %}
+            <div class="text-danger small">{{ error }}</div>
+        {% endfor %}
+    </div>
+    <div class="mb-3">
+        {{ form.new_author.label(class="form-label") }}
+        {{ form.new_author(class="form-control") }}
+        <div class="form-text">Leave empty to keep selected author</div>
+    </div>
+    <div class="mb-3">
+        {{ form.genre.label(class="form-label") }}
+        {{ form.genre(class="form-select") }}
+        {% for error in form.genre.errors %}
+            <div class="text-danger small">{{ error }}</div>
+        {% endfor %}
+    </div>
+    <div class="mb-3">
+        {{ form.new_genre.label(class="form-label") }}
+        {{ form.new_genre(class="form-control") }}
+        <div class="form-text">Leave empty to keep selected genre</div>
+    </div>
+    <div class="mb-3">
+        {{ form.cover.label(class="form-label") }}
+        {{ form.cover(class="form-control") }}
+        {% if book.cover_path %}
+            <div class="mt-2">
+                <img src="{{ url_for('static', filename='covers/' + book.cover_path) }}" style="max-height: 100px;" alt="current cover">
+                <p class="small text-muted">Current cover. Upload new to replace.</p>
+            </div>
+        {% endif %}
+        {% for error in form.cover.errors %}
+            <div class="text-danger small">{{ error }}</div>
+        {% endfor %}
+    </div>
+    {{ form.submit(class="btn btn-primary") }}
+    <a href="{{ url_for('index') }}" class="btn btn-secondary">Cancel</a>
+</form>
+{% endblock %}

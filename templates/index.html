@@ -1,0 +1,95 @@
+{% extends 'base.html' %}
+
+{% block content %}
+{% if not current_user.is_authenticated %}
+    <div class="text-center py-5">
+        <h1>Welcome to Personal Library Manager</h1>
+        <p>Please <a href="{{ url_for('login') }}">login</a> or <a href="{{ url_for('register') }}">register</a> to manage your library.</p>
+    </div>
+{% else %}
+    <h2>My Library</h2>
+    <form method="get" class="row g-3 mb-4">
+        <div class="col-md-3">
+            <label>Author</label>
+            <select name="author" class="form-select">
+                <option value="">All</option>
+                {% for a in authors %}
+                    <option value="{{ a.id }}" {% if selected_author == a.id %}selected{% endif %}>{{ a.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label>Genre</label>
+            <select name="genre" class="form-select">
+                <option value="">All</option>
+                {% for g in genres %}
+                    <option value="{{ g.id }}" {% if selected_genre == g.id %}selected{% endif %}>{{ g.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label>Status</label>
+            <select name="status" class="form-select">
+                <option value="">All</option>
+                <option value="loaned" {% if selected_status == 'loaned' %}selected{% endif %}>On loan</option>
+                <option value="available" {% if selected_status == 'available' %}selected{% endif %}>Available</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label>Sort by</label>
+            <select name="sort" class="form-select">
+                <option value="added_date" {% if current_sort == 'added_date' %}selected{% endif %}>Date added</option>
+                <option value="title" {% if current_sort == 'title' %}selected{% endif %}>Title</option>
+                <option value="author_name" {% if current_sort == 'author_name' %}selected{% endif %}>Author</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label>Search</label>
+            <input type="text" name="search" value="{{ search_query }}" class="form-control" placeholder="Title">
+        </div>
+        <div class="col-md-12">
+            <button type="submit" class="btn btn-primary">Apply</button>
+            <a href="{{ url_for('index') }}" class="btn btn-secondary">Reset</a>
+        </div>
+    </form>
+
+    <div class="row">
+        {% for book in books %}
+            <div class="col-md-4 mb-4">
+                <div class="card h-100">
+                    {% if book.cover_path %}
+                        <img src="{{ url_for('static', filename='covers/' + book.cover_path) }}" class="card-img-top" alt="cover" style="height: 200px; object-fit: cover;">
+                    {% else %}
+                        <div class="card-img-top bg-secondary text-white text-center py-5">No cover</div>
+                    {% endif %}
+                    <div class="card-body">
+                        <h5 class="card-title">{{ book.title }}</h5>
+                        <p class="card-text">
+                            <strong>{{ book.author.name }}</strong><br>
+                            {{ book.genre.name }} · {{ book.year or '?' }}<br>
+                            <span class="badge {% if book.is_loaned %}bg-warning{% else %}bg-success{% endif %}">
+                                {% if book.is_loaned %}On loan{% else %}In library{% endif %}
+                            </span>
+                        </p>
+                        <div class="btn-group w-100">
+                            {% if not book.is_loaned %}
+                                <a href="{{ url_for('loan_book', book_id=book.id) }}" class="btn btn-sm btn-outline-primary">📖 Loan</a>
+                            {% else %}
+                                <form method="post" action="{{ url_for('return_book', book_id=book.id) }}" style="display:inline;">
+                                    <button type="submit" class="btn btn-sm btn-outline-secondary">🔄 Return</button>
+                                </form>
+                            {% endif %}
+                            <a href="{{ url_for('edit_book', book_id=book.id) }}" class="btn btn-sm btn-outline-info">✏️ Edit</a>
+                            <form method="post" action="{{ url_for('delete_book', book_id=book.id) }}" style="display:inline;" onsubmit="return confirm('Delete this book?');">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">🗑️ Delete</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            <div class="col-12"><p>No books yet. <a href="{{ url_for('add_book') }}">Add your first book</a>.</p></div>
+        {% endfor %}
+    </div>
+{% endif %}
+{% endblock %}
