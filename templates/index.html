@@ -9,7 +9,7 @@
 {% else %}
     <h2>My Library</h2>
     <form method="get" class="row g-3 mb-4">
-        <div class="col-md-3">
+        <div class="col-md-2">
             <label>Author</label>
             <select name="author" class="form-select">
                 <option value="">All</option>
@@ -18,7 +18,7 @@
                 {% endfor %}
             </select>
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
             <label>Genre</label>
             <select name="genre" class="form-select">
                 <option value="">All</option>
@@ -34,6 +34,15 @@
                 <option value="loaned" {% if selected_status == 'loaned' %}selected{% endif %}>On loan</option>
                 <option value="available" {% if selected_status == 'available' %}selected{% endif %}>Available</option>
             </select>
+        </div>
+        <div class="col-md-2">
+            <label>Borrower</label>
+            <input list="borrowerList" name="borrower" class="form-control" placeholder="Enter name" value="{{ selected_borrower or '' }}">
+            <datalist id="borrowerList">
+                {% for b in borrowers %}
+                    <option value="{{ b }}">{{ b }}</option>
+                {% endfor %}
+            </datalist>
         </div>
         <div class="col-md-2">
             <label>Sort by</label>
@@ -70,6 +79,10 @@
                             <span class="badge {% if book.is_loaned %}bg-warning{% else %}bg-success{% endif %}">
                                 {% if book.is_loaned %}On loan{% else %}In library{% endif %}
                             </span>
+                            <!-- ОТОБРАЖАЕМ ИМЯ ЧИТАТЕЛЯ, ЕСЛИ КНИГА ВЫДАНА -->
+                            {% if book.is_loaned and book.current_borrower %}
+                                <br><small class="text-muted">Loaned to: {{ book.current_borrower }}</small>
+                            {% endif %}
                         </p>
                         <div class="btn-group w-100">
                             {% if not book.is_loaned %}

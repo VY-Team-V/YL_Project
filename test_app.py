@@ -1,3 +1,4 @@
+import bcrypt
 import pytest
 from app import app, db
 from models import User, Book, Author, Genre

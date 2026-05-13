@@ -20,6 +20,9 @@
     <div class="mb-3">
         {{ form.author.label(class="form-label") }}
         {{ form.author(class="form-select") }}
+        <div class="form-text">
+            If your author is not in the list, leave this as "-- Select author --" and fill "Or add new author" below.
+        </div>
         {% for error in form.author.errors %}
             <div class="text-danger small">{{ error }}</div>
         {% endfor %}
@@ -27,11 +30,16 @@
     <div class="mb-3">
         {{ form.new_author.label(class="form-label") }}
         {{ form.new_author(class="form-control") }}
-        <div class="form-text">Leave empty to select from above</div>
+        <div class="form-text">
+            <strong>Required if no author selected above or if this is your first book.</strong>
+        </div>
     </div>
     <div class="mb-3">
         {{ form.genre.label(class="form-label") }}
         {{ form.genre(class="form-select") }}
+        <div class="form-text">
+            If your genre is not in the list, leave this as "-- Select genre --" and fill "Or add new genre" below.
+        </div>
         {% for error in form.genre.errors %}
             <div class="text-danger small">{{ error }}</div>
         {% endfor %}
@@ -39,7 +47,9 @@
     <div class="mb-3">
         {{ form.new_genre.label(class="form-label") }}
         {{ form.new_genre(class="form-control") }}
-        <div class="form-text">Leave empty to select from above</div>
+        <div class="form-text">
+            <strong>Required if no genre selected above or if this is your first book.</strong>
+        </div>
     </div>
     <div class="mb-3">
         {{ form.cover.label(class="form-label") }}

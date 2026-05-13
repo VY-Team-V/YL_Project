@@ -5,63 +5,88 @@ from werkzeug.utils import secure_filename
 from flask import Flask, render_template, redirect, url_for, flash, request, jsonify
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 import bcrypt
-
 from config import Config
 from models import db, User, Author, Genre, Book, Loan
 from forms import RegistrationForm, LoginForm, BookForm, LoanForm
 
+# Инициализация Flask-приложения
 app = Flask(__name__)
+# Загрузка конфигурации из внешнего модуля
 app.config.from_object(Config)
+# Инициализация расширения базы данных
 db.init_app(app)
-
+# Настройка менеджера аутентификации
 login_manager = LoginManager()
 login_manager.init_app(app)
+# Маршрут для перенаправления неавторизованных пользователей
 login_manager.login_view = 'login'
 
+# Загрузка объекта пользователя по его ID
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
 
+# Создание директории для загрузки обложек, если она отсутствует
 def ensure_upload_folder():
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
+# Сохранение загруженного файла обложки с уникальным именем
 def save_cover(cover_file, book_id=None):
     if not cover_file:
         return None
     ext = cover_file.filename.rsplit('.', 1)[1].lower()
     if book_id:
-        filename = f"cover_{book_id}_{uuid.uuid4().hex[:8]}.{ext}"
+        filename = f"cover_{book_id}{uuid.uuid4().hex[:8]}.{ext}"
     else:
-        filename = f"cover_temp_{uuid.uuid4().hex}.{ext}"
+        filename = f"cover_temp{uuid.uuid4().hex}.{ext}"
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     cover_file.save(filepath)
     return filename
 
+# Удаление файла обложки по указанному пути
 def delete_cover(cover_path):
     if cover_path:
         full_path = os.path.join(app.config['UPLOAD_FOLDER'], cover_path)
         if os.path.exists(full_path):
             os.remove(full_path)
 
+# Главная страница: фильтрация, поиск и сортировка книг
 @app.route('/')
 def index():
+    # Показываем пустую страницу гостям
     if not current_user.is_authenticated:
-        return render_template('index.html', books=None, authors=[], genres=[])
+        return render_template('index.html', books=None, authors=[], genres=[], borrowers=[])
+    
+    # Базовый запрос: только книги текущего пользователя
     query = Book.query.filter_by(user_id=current_user.id)
+    
+    # Применение фильтров из GET-параметров
     author_id = request.args.get('author', type=int)
     if author_id:
         query = query.filter_by(author_id=author_id)
+
     genre_id = request.args.get('genre', type=int)
     if genre_id:
         query = query.filter_by(genre_id=genre_id)
+
     status = request.args.get('status')
     if status == 'loaned':
         query = query.filter_by(is_loaned=True)
     elif status == 'available':
         query = query.filter_by(is_loaned=False)
+
+    borrower_filter = request.args.get('borrower', '')
+    if borrower_filter:
+        query = query.join(Loan, Book.id == Loan.book_id).filter(
+            Loan.return_date == None,
+            Loan.borrower_name.ilike(f'%{borrower_filter}%')
+        )
+
     search = request.args.get('search', '')
     if search:
         query = query.filter(Book.title.ilike(f'%{search}%'))
+
+    # Сортировка результатов
     sort = request.args.get('sort', 'added_date')
     if sort == 'title':
         query = query.order_by(Book.title)
@@ -75,10 +100,27 @@ def index():
     books = query.all()
     authors = Author.query.filter_by(user_id=current_user.id).order_by(Author.name).all()
     genres = Genre.query.filter_by(user_id=current_user.id).order_by(Genre.name).all()
-    return render_template('index.html', books=books, authors=authors, genres=genres,
-                           selected_author=author_id, selected_genre=genre_id, selected_status=status,
-                           search_query=search, current_sort=sort)
 
+    # Сбор уникальных имён активных заемщиков
+    active_loans = Loan.query.join(Book).filter(
+        Book.user_id == current_user.id,
+        Loan.return_date == None
+    ).distinct(Loan.borrower_name).all()
+    borrowers = sorted(set(loan.borrower_name for loan in active_loans))
+
+    return render_template('index.html', 
+                           books=books, 
+                           authors=authors, 
+                           genres=genres,
+                           borrowers=borrowers,
+                           selected_author=author_id, 
+                           selected_genre=genre_id, 
+                           selected_status=status,
+                           selected_borrower=borrower_filter,
+                           search_query=search, 
+                           current_sort=sort)
+
+# Регистрация нового аккаунта
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if current_user.is_authenticated:
@@ -93,6 +135,7 @@ def register():
         return redirect(url_for('login'))
     return render_template('register.html', form=form)
 
+# Авторизация пользователя
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
@@ -109,6 +152,7 @@ def login():
             flash('Invalid username or password', 'danger')
     return render_template('login.html', form=form)
 
+# Выход из системы
 @app.route('/logout')
 @login_required
 def logout():
@@ -116,37 +160,42 @@ def logout():
     flash('You have been logged out.', 'info')
     return redirect(url_for('index'))
 
+# Добавление новой книги в библиотеку
 @app.route('/book/add', methods=['GET', 'POST'])
 @login_required
 def add_book():
     form = BookForm()
     form.author.choices = [(0, '-- Select author --')] + [(a.id, a.name) for a in Author.query.filter_by(user_id=current_user.id).order_by(Author.name)]
     form.genre.choices = [(0, '-- Select genre --')] + [(g.id, g.name) for g in Genre.query.filter_by(user_id=current_user.id).order_by(Genre.name)]
-
+    
     if form.validate_on_submit():
         author_id = form.author.data
-        if form.new_author.data:
+        # Создание нового автора, если указано имя
+        if form.new_author.data and form.new_author.data.strip():
             new_author_name = form.new_author.data.strip()
-            if new_author_name:
-                author = Author.query.filter_by(user_id=current_user.id, name=new_author_name).first()
-                if not author:
-                    author = Author(name=new_author_name, user_id=current_user.id)
-                    db.session.add(author)
-                    db.session.flush()
-                author_id = author.id
-        genre_id = form.genre.data
-        if form.new_genre.data:
-            new_genre_name = form.new_genre.data.strip()
-            if new_genre_name:
-                genre = Genre.query.filter_by(user_id=current_user.id, name=new_genre_name).first()
-                if not genre:
-                    genre = Genre(name=new_genre_name, user_id=current_user.id)
-                    db.session.add(genre)
-                    db.session.flush()
-                genre_id = genre.id
+            author = Author.query.filter_by(user_id=current_user.id, name=new_author_name).first()
+            if not author:
+                author = Author(name=new_author_name, user_id=current_user.id)
+                db.session.add(author)
+                db.session.flush()
+            author_id = author.id
 
-        if author_id == 0 or genre_id == 0:
-            flash('Please select or add a valid author and genre.', 'danger')
+        genre_id = form.genre.data
+        # Создание нового жанра, если указано имя
+        if form.new_genre.data and form.new_genre.data.strip():
+            new_genre_name = form.new_genre.data.strip()
+            genre = Genre.query.filter_by(user_id=current_user.id, name=new_genre_name).first()
+            if not genre:
+                genre = Genre(name=new_genre_name, user_id=current_user.id)
+                db.session.add(genre)
+                db.session.flush()
+            genre_id = genre.id
+
+        if not author_id or author_id == 0:
+            flash('Please select an author from the list or add a new one using the "Or add new author" field.', 'danger')
+            return redirect(url_for('add_book'))
+        if not genre_id or genre_id == 0:
+            flash('Please select a genre from the list or add a new one using the "Or add new genre" field.', 'danger')
             return redirect(url_for('add_book'))
 
         cover_filename = None
@@ -164,8 +213,10 @@ def add_book():
         db.session.add(book)
         db.session.commit()
 
+        # Переименование временного файла после получения ID книги
         if cover_filename and 'temp' in cover_filename:
-            new_name = f"cover_{book.id}_{uuid.uuid4().hex[:8]}.{cover_filename.split('.')[-1]}"
+            ext = cover_filename.split('.')[-1]
+            new_name = f"cover_{book.id}_{uuid.uuid4().hex[:8]}.{ext}"
             old_path = os.path.join(app.config['UPLOAD_FOLDER'], cover_filename)
             new_path = os.path.join(app.config['UPLOAD_FOLDER'], new_name)
             os.rename(old_path, new_path)
@@ -177,40 +228,43 @@ def add_book():
 
     return render_template('add_book.html', form=form)
 
+# Редактирование существующей книги
 @app.route('/book/<int:book_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_book(book_id):
     book = Book.query.filter_by(id=book_id, user_id=current_user.id).first_or_404()
     form = BookForm(obj=book)
-    form.author.choices = [(a.id, a.name) for a in Author.query.filter_by(user_id=current_user.id).order_by(Author.name)]
-    form.genre.choices = [(g.id, g.name) for g in Genre.query.filter_by(user_id=current_user.id).order_by(Genre.name)]
+    form.author.choices = [(0, '-- Select author --')] + [(a.id, a.name) for a in Author.query.filter_by(user_id=current_user.id).order_by(Author.name)]
+    form.genre.choices = [(0, '-- Select genre --')] + [(g.id, g.name) for g in Genre.query.filter_by(user_id=current_user.id).order_by(Genre.name)]
     form.author.data = book.author_id
     form.genre.data = book.genre_id
-
+    
     if form.validate_on_submit():
         author_id = form.author.data
-        if form.new_author.data:
+        if form.new_author.data and form.new_author.data.strip():
             new_author_name = form.new_author.data.strip()
-            if new_author_name:
-                author = Author.query.filter_by(user_id=current_user.id, name=new_author_name).first()
-                if not author:
-                    author = Author(name=new_author_name, user_id=current_user.id)
-                    db.session.add(author)
-                    db.session.flush()
-                author_id = author.id
-        genre_id = form.genre.data
-        if form.new_genre.data:
-            new_genre_name = form.new_genre.data.strip()
-            if new_genre_name:
-                genre = Genre.query.filter_by(user_id=current_user.id, name=new_genre_name).first()
-                if not genre:
-                    genre = Genre(name=new_genre_name, user_id=current_user.id)
-                    db.session.add(genre)
-                    db.session.flush()
-                genre_id = genre.id
+            author = Author.query.filter_by(user_id=current_user.id, name=new_author_name).first()
+            if not author:
+                author = Author(name=new_author_name, user_id=current_user.id)
+                db.session.add(author)
+                db.session.flush()
+            author_id = author.id
 
-        if author_id == 0 or genre_id == 0:
-            flash('Please select or add a valid author and genre.', 'danger')
+        genre_id = form.genre.data
+        if form.new_genre.data and form.new_genre.data.strip():
+            new_genre_name = form.new_genre.data.strip()
+            genre = Genre.query.filter_by(user_id=current_user.id, name=new_genre_name).first()
+            if not genre:
+                genre = Genre(name=new_genre_name, user_id=current_user.id)
+                db.session.add(genre)
+                db.session.flush()
+            genre_id = genre.id
+
+        if not author_id or author_id == 0:
+            flash('Please select an author or add a new one.', 'danger')
+            return redirect(url_for('edit_book', book_id=book_id))
+        if not genre_id or genre_id == 0:
+            flash('Please select a genre or add a new one.', 'danger')
             return redirect(url_for('edit_book', book_id=book_id))
 
         book.title = form.title.data
@@ -229,6 +283,7 @@ def edit_book(book_id):
 
     return render_template('edit_book.html', form=form, book=book)
 
+# Удаление книги и её обложки
 @app.route('/book/<int:book_id>/delete', methods=['POST'])
 @login_required
 def delete_book(book_id):
@@ -239,6 +294,7 @@ def delete_book(book_id):
     flash('Book deleted.', 'success')
     return redirect(url_for('index'))
 
+# Оформление выдачи книги
 @app.route('/book/<int:book_id>/loan', methods=['GET', 'POST'])
 @login_required
 def loan_book(book_id):
@@ -260,6 +316,7 @@ def loan_book(book_id):
         return redirect(url_for('index'))
     return render_template('loan_book.html', form=form, book=book)
 
+# Возврат книги в библиотеку
 @app.route('/book/<int:book_id>/return', methods=['POST'])
 @login_required
 def return_book(book_id):
@@ -270,12 +327,12 @@ def return_book(book_id):
     loan = Loan.query.filter_by(book_id=book.id, return_date=None).first()
     if loan:
         loan.return_date = date.today()
-    book.is_loaned = False
-    db.session.commit()
-    flash('Book returned.', 'success')
-    return redirect(url_for('index'))
+        book.is_loaned = False
+        db.session.commit()
+        flash('Book returned.', 'success')
+        return redirect(url_for('index'))
 
-# API
+# REST API для получения списка книг в формате JSON
 @app.route('/api/books')
 def api_books():
     if not current_user.is_authenticated:
@@ -294,6 +351,7 @@ def api_books():
         })
     return jsonify(result)
 
+# Запуск сервера разработки
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()

@@ -2,8 +2,10 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from datetime import datetime
 
+# Инициализация ORM для работы с базой данных
 db = SQLAlchemy()
 
+# Модель пользователя с интеграцией Flask-Login
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
@@ -12,18 +14,21 @@ class User(UserMixin, db.Model):
     authors = db.relationship('Author', backref='user', lazy=True, cascade='all, delete-orphan')
     genres = db.relationship('Genre', backref='user', lazy=True, cascade='all, delete-orphan')
 
+# Модель автора книги
 class Author(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     books = db.relationship('Book', backref='author', lazy=True)
 
+# Модель жанра книги
 class Genre(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     books = db.relationship('Book', backref='genre', lazy=True)
 
+# Модель книги
 class Book(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(200), nullable=False)
@@ -36,6 +41,15 @@ class Book(db.Model):
     genre_id = db.Column(db.Integer, db.ForeignKey('genre.id'), nullable=False)
     loans = db.relationship('Loan', backref='book', lazy=True, cascade='all, delete-orphan')
 
+    # Свойство для получения имени текущего читателя
+    @property
+    def current_borrower(self):
+        if self.is_loaned:
+            active_loan = Loan.query.filter_by(book_id=self.id, return_date=None).first()
+            return active_loan.borrower_name if active_loan else None
+        return None
+
+# Модель записи о выдаче книги читателю
 class Loan(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     borrower_name = db.Column(db.String(100), nullable=False)

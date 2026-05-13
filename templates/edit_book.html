@@ -20,6 +20,7 @@
     <div class="mb-3">
         {{ form.author.label(class="form-label") }}
         {{ form.author(class="form-select") }}
+        <div class="form-text">Select existing author or add new one below.</div>
         {% for error in form.author.errors %}
             <div class="text-danger small">{{ error }}</div>
         {% endfor %}
@@ -27,11 +28,12 @@
     <div class="mb-3">
         {{ form.new_author.label(class="form-label") }}
         {{ form.new_author(class="form-control") }}
-        <div class="form-text">Leave empty to keep selected author</div>
+        <div class="form-text">Fill this only if you want to change author to a new one (not in list).</div>
     </div>
     <div class="mb-3">
         {{ form.genre.label(class="form-label") }}
         {{ form.genre(class="form-select") }}
+        <div class="form-text">Select existing genre or add new one below.</div>
         {% for error in form.genre.errors %}
             <div class="text-danger small">{{ error }}</div>
         {% endfor %}
@@ -39,7 +41,7 @@
     <div class="mb-3">
         {{ form.new_genre.label(class="form-label") }}
         {{ form.new_genre(class="form-control") }}
-        <div class="form-text">Leave empty to keep selected genre</div>
+        <div class="form-text">Fill this only if you want to change genre to a new one (not in list).</div>
     </div>
     <div class="mb-3">
         {{ form.cover.label(class="form-label") }}
